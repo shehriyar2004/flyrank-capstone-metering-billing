@@ -1,0 +1,22 @@
+# Evaluator manifest: how to run, seed, and probe this capstone.
+name: flyrank-capstone-metering-billing
+run: ./run.sh
+seed: ./.venv/bin/python scripts/seed.py
+test: ./.venv/bin/python -m pytest -q
+base_url: http://127.0.0.1:8000
+probes:
+  # POST /generate twice with the same idempotency key -> one usage event,
+  # second response mirrors the first (X-Idempotent-Replayed: true).
+  - idempotency
+  # Drive a tenant to its exact quota -> boundary request allowed per the
+  # documented rule; the next one returns 429/402 with a clear message.
+  - quota_boundary
+  # Signed checkout.session.completed webhook -> tenant Free -> Pro;
+  # GET /usage shows the new limits.
+  - stripe_checkout_webhook
+  # Forged webhook (bad signature) -> 400, nothing changes; replay of a real
+  # event -> processed once.
+  - webhook_security
+  # Pinned pricing: cached-input discount + reasoning-as-output produce the
+  # exact expected totals; GET /usage matches.
+  - pricing_math
